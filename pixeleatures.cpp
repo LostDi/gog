@@ -8,9 +8,9 @@ cv::Mat Pixelfeatures::get_pixelfeatures(cv::Mat X){
 
 	// y
 	if(lfparam.usebase[0]){
-		cv::Mat PY(1,X.cols,CV_32F,cv::Scalar::all(float(1/X.rows)));
+		cv::Mat PY(1,X.cols,CV_32F,cv::Scalar::all(float(1.f/X.rows)));
 		for(int i=2;i<=X.rows;++i){
-			cv::Mat temp(1,X.cols,CV_32F,cv::Scalar::all(float(i/X.rows)));
+			cv::Mat temp(1,X.cols,CV_32F,cv::Scalar::all(float(i)/X.rows));
 			PY.push_back(temp);
 		}
 
@@ -51,13 +51,13 @@ cv::Mat Pixelfeatures::get_pixelfeatures(cv::Mat X){
 		dimstart=dimstart+binhog;
 	}
 
-	// RGB
+	// RGB **the image is read by BGR. Hence, the index has changed in here**
 	if(lfparam.usebase[2]){
 		for(int i=0;i<F.size[0];++i){
 			for(int j=0;j<F.size[1];++j){
-				F.at<float>(i,j,dimstart)=X.at<cv::Vec3f>(i,j)[0]/255;
-				F.at<float>(i,j,dimstart+1)=X.at<cv::Vec3f>(i,j)[1]/255;
-				F.at<float>(i,j,dimstart+2)=X.at<cv::Vec3f>(i,j)[2]/255;
+				F.at<float>(i,j,dimstart)=X.at<cv::Vec3f>(i,j)[2]/255; //R
+				F.at<float>(i,j,dimstart+1)=X.at<cv::Vec3f>(i,j)[1]/255; //G
+				F.at<float>(i,j,dimstart+2)=X.at<cv::Vec3f>(i,j)[0]/255; //B
 			}
 		}
 

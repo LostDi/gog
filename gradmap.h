@@ -34,7 +34,7 @@ private:
 	int binnum;
 
 	void get_gradmap(cv::Mat X,cv::Mat &qori,cv::Mat &ori,cv::Mat &mag);
-
+	void imfilter2(cv::Mat src_image,cv::Mat filter,cv::Mat &dst_image);
 };
 
 #endif /* GET_GRADMAP_HPP_ */

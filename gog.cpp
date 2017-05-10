@@ -1,15 +1,11 @@
 /*
- * gog.hpp
+ * gog.cpp
  *
- *  Created on: 2017-4-25
+ *  Created on: 2017-5-10
  *      Author: di
  */
-#ifndef GOG_HPP_
-#define GOG_HPP_
 
-#include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
+#include "gog.h"
 #include "pixelfeatures.h"
 #include <math.h>
 #include <algorithm>
@@ -17,28 +13,75 @@
 #include <Eigen/Dense>
 #include <unsupported/Eigen/MatrixFunctions>
 #include <opencv2/core/eigen.hpp>
-#include <iostream>
 
 #define PI 3.141592
 
-struct Param{
-	lfParam lfparam;
-	int p=2;
-	int k=5;
-	float espsilon0=0.001;
-	bool ifweight=true;
-	int G=7;
-};
+cv::Mat GOG::getFeature(cv::Mat image){
 
-struct PartGrid{
-	int gwidth;
-	int gheight;
-	int ystep;
-	int xstep;
-};
+	  cv::Mat rimage,rimage_64f;
+	  cv::resize(image,rimage,this->s);
+	  rimage.convertTo(rimage_64f,CV_32F);
 
-cv::Mat patchGaussian(cv::Mat F,Param param){
+	  Pixelfeatures pixeleatures(param.lfparam);
+	  cv::Mat F=pixeleatures.get_pixelfeatures(rimage_64f);
 
+	  cv::Mat M1=patchGaussian(F);
+	  cv::Mat M2=regionGaussian(M1);
+
+	  return M2;
+}
+
+cv::Mat GOG::regionGaussian(cv::Mat F){
+	cv::Mat weightmap;
+	cv::Mat featureAll;
+
+	if(!this->param.ifweight){
+		weightmap=cv::Mat::zeros(F.size[0],F.size[1],CV_32F);
+	}
+	else{
+		float sigma=F.size[1]/4.f;
+		float  mu=F.size[1]/2.f;
+		for(int i=1;i<F.size[1]+1;++i){
+			cv::Mat weightmapcol(1,F.size[0],CV_32F,cv::Scalar::all( exp(-(i-mu)*(i-mu)/(2*sigma*sigma))/(sigma*sqrt(2*PI)) ));
+			weightmap.push_back(weightmapcol);
+		}
+		weightmap=weightmap.t();
+	}
+
+	if(param.G==7){
+		this->parGrid.gheight=F.size[0]/4;
+		this->parGrid.gwidth=F.size[1];
+		this->parGrid.ystep=parGrid.gheight/2;
+		this->parGrid.xstep=parGrid.gwidth;
+	}
+
+	int gheight2 = this->parGrid.gheight/this->param.p;
+	int gwidth2 = this->parGrid.gwidth/this->param.p;
+	int ystep2 = this->parGrid.ystep/this->param.p;
+	int xstep2 = this->parGrid.xstep/this->param.p;
+
+	const int region_size[3]={gheight2,gwidth2,F.size[2]};
+	cv::Mat region(3,region_size,CV_32F);
+	for(int prow=0;prow<=F.size[0]-gheight2;prow=prow+ystep2){
+		for(int pcol=0;pcol<=F.size[1]-gwidth2;pcol=pcol+xstep2){
+
+			for(int i=0;i<region_size[0];++i){
+				for(int j=0;j<region_size[1];++j){
+					for(int k=0;k<region_size[2];++k){
+						region.at<float>(i,j,k)=F.at<float>(i+prow,j+pcol,k);
+					}
+				}
+			}
+
+			cv::Mat regionFeature=GOG::gog(region,weightmap(cv::Rect(pcol,prow,gwidth2,gheight2)));
+			featureAll.push_back(regionFeature);
+		}
+	}
+
+	return featureAll;
+}
+
+cv::Mat GOG::patchGaussian(cv::Mat F){
 	std::vector<std::vector<std::vector<float> > > result;
 	for(int prow=0;prow<F.size[0];prow=prow+param.p){
 		std::vector<std::vector<float> > eachRow;
@@ -108,11 +151,8 @@ cv::Mat patchGaussian(cv::Mat F,Param param){
 		}
 	}
 	return re;
-
 }
-
-cv::Mat gog(cv::Mat F,cv::Mat weightmap){
-
+cv::Mat GOG::gog(cv::Mat F,cv::Mat weightmap){
 	cv::Mat u=cv::Mat(F.size[2],1,CV_32F,cv::Scalar::all(0));
 	cv::Mat fi=cv::Mat(F.size[2],1,CV_32F,cv::Scalar::all(0));
 
@@ -137,32 +177,8 @@ cv::Mat gog(cv::Mat F,cv::Mat weightmap){
 	}
 
 	sumfi=sumfi.mul(1.f/cv::sum(weightmap)[0]);
-	/*//debug
-	float test=cv::sum(weightmap)[0];
+	sumfi=sumfi+param.espsilon0*std::max(0.01,cv::trace(sumfi)[0])*cv::Mat::eye(sumfi.rows,sumfi.cols,CV_32F);
 
-	for(int i=0;i<weightmap.rows;++i){
-		std::cout<<std::endl;
-		for(int j=0;j<weightmap.cols;++j){
-			std::cout<<"we:"<<weightmap.at<float>(i,j)<<" ";
-		}
-	}
-
-	for(int i=0;i<u.rows;++i){
-		std::cout<<std::endl;
-		for(int j=0;j<u.cols;++j){
-			std::cout<<"u:"<<u.at<float>(i,j)<<" ";
-		}
-	}
-	for(int i=0;i<sumfi.rows;++i){
-		std::cout<<std::endl;
-		for(int j=0;j<sumfi.cols;++j){
-			std::cout<<"s:"<<sumfi.at<float>(i,j)<<" ";
-		}
-	}
-
-	*///enddug
-
-	sumfi=sumfi+0.001*std::max(0.01,cv::trace(sumfi)[0])*cv::Mat::eye(sumfi.rows,sumfi.cols,CV_32F);
 	cv::Mat keyMatrix;
 	cv::hconcat(sumfi+u*u.t(),u,keyMatrix);
 	cv::Mat lastrow=u.clone();
@@ -170,14 +186,7 @@ cv::Mat gog(cv::Mat F,cv::Mat weightmap){
 	keyMatrix.push_back(lastrow.t());
 	keyMatrix=keyMatrix.mul(pow(cv::determinant(sumfi),-1.f/(sumfi.rows+1)));
 
-	/*//debug
-	for(int i=0;i<keyMatrix.rows;++i){
-		std::cout<<std::endl;
-		for(int j=0;j<keyMatrix.cols;++j){
-			std::cout<<"k:"<<keyMatrix.at<float>(i,j)<<" ";
-		}
-	}
-	*///enddebug
+
 
 	// logm
 	Eigen::Matrix<float,-1,-1> eigMat;
@@ -185,71 +194,17 @@ cv::Mat gog(cv::Mat F,cv::Mat weightmap){
 	Eigen::Matrix<float,-1,-1> logm;
 	logm=eigMat.log();
 	cv::eigen2cv(logm,keyMatrix);
-	/*//debug
-	for(int i=0;i<keyMatrix.rows;++i){
-		std::cout<<std::endl;
-		for(int j=0;j<keyMatrix.cols;++j){
-			std::cout<<"kl:"<<keyMatrix.at<float>(i,j)<<" ";
-		}
-	}
-	*///enddebug
+
 
 	std::vector<float> toStraight;
 	for(int i=0;i<keyMatrix.rows;++i){
 		toStraight.push_back(keyMatrix.at<float>(i,i));
-		//std::cout<<"kv:"<<keyMatrix.at<float>(i,i)<<std::endl;
 		for(int j=i+1;j<keyMatrix.cols;++j){
 			toStraight.push_back(sqrt(2.f)*keyMatrix.at<float>(i,j));
-			//std::cout<<"kv:"<<sqrt(2.f)*keyMatrix.at<float>(i,j)<<std::endl;
 		}
 	}
+
 	cv::Mat Feature(toStraight,1);
 
 	return Feature;
 }
-
-cv::Mat regionGaussian(cv::Mat F,Param param,PartGrid parGrid){
-	cv::Mat weightmap;
-	cv::Mat featureAll;
-
-	if(!param.ifweight){
-		weightmap=cv::Mat::zeros(F.size[0],F.size[1],CV_32F);
-	}
-	else{
-		float sigma=F.size[1]/4.f;
-		float  mu=F.size[1]/2.f;
-		for(int i=1;i<F.size[1]+1;++i){
-			cv::Mat weightmapcol(1,F.size[0],CV_32F,cv::Scalar::all( exp(-(i-mu)*(i-mu)/(2*sigma*sigma))/(sigma*sqrt(2*PI)) ));
-			weightmap.push_back(weightmapcol);
-		}
-		weightmap=weightmap.t();
-	}
-
-	int gheight2 = parGrid.gheight/param.p;
-	int gwidth2 = parGrid.gwidth/param.p;
-	int ystep2 = parGrid.ystep/param.p;
-	int xstep2 = parGrid.xstep/param.p;
-
-	const int region_size[3]={gheight2,gwidth2,F.size[2]};
-	cv::Mat region(3,region_size,CV_32F);
-	for(int prow=0;prow<=F.size[0]-gheight2;prow=prow+ystep2){
-		for(int pcol=0;pcol<=F.size[1]-gwidth2;pcol=pcol+xstep2){
-
-			for(int i=0;i<region_size[0];++i){
-				for(int j=0;j<region_size[1];++j){
-					for(int k=0;k<region_size[2];++k){
-						region.at<float>(i,j,k)=F.at<float>(i+prow,j+pcol,k);
-					}
-				}
-			}
-
-
-			cv::Mat regionFeature=gog(region,weightmap(cv::Rect(pcol,prow,gwidth2,gheight2)));
-			featureAll.push_back(regionFeature);
-		}
-	}
-
-	return featureAll;
-}
-
-#endif /*GOG.HPP*/
