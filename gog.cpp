@@ -47,18 +47,18 @@ cv::Mat GOG::regionGaussian(cv::Mat F){
 		}
 		weightmap=weightmap.t();
 	}
-
+	int test=F.size[1];
 	if(param.G==7){
-		this->parGrid.gheight=F.size[0]/4;
+		this->parGrid.gheight=F.size[0]/2;
 		this->parGrid.gwidth=F.size[1];
 		this->parGrid.ystep=parGrid.gheight/2;
 		this->parGrid.xstep=parGrid.gwidth;
 	}
 
 	int gheight2 = this->parGrid.gheight/this->param.p;
-	int gwidth2 = this->parGrid.gwidth/this->param.p;
+	int gwidth2 = this->parGrid.gwidth;
 	int ystep2 = this->parGrid.ystep/this->param.p;
-	int xstep2 = this->parGrid.xstep/this->param.p;
+	int xstep2 = this->parGrid.xstep;
 
 	const int region_size[3]={gheight2,gwidth2,F.size[2]};
 	cv::Mat region(3,region_size,CV_32F);
