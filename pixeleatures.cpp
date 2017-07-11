@@ -8,9 +8,9 @@ cv::Mat Pixelfeatures::get_pixelfeatures(cv::Mat X){
 
 	// y
 	if(lfparam.usebase[0]){
-		cv::Mat PY(1,X.cols,CV_32F,cv::Scalar::all(float(1.f/X.rows)));
+		cv::Mat PY(1,X.cols,CV_32F,cv::Scalar::all(1.f/X.rows));
 		for(int i=2;i<=X.rows;++i){
-			cv::Mat temp(1,X.cols,CV_32F,cv::Scalar::all(float(i)/X.rows));
+			cv::Mat temp(1,X.cols,CV_32F,cv::Scalar::all(i*1.f/X.rows));
 			PY.push_back(temp);
 		}
 

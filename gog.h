@@ -52,6 +52,8 @@ protected:
 	cv::Mat regionGaussian(cv::Mat F);
 	cv::Mat patchGaussian(cv::Mat F);
 	cv::Mat gog(cv::Mat F,cv::Mat weightmap);
+	inline cv::Mat vec2Mat(cv::Mat vecMat,int dim);
+	inline cv::Mat halfVec(cv::Mat fullMat);
 
 };
 
